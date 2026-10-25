@@ -1,0 +1,60 @@
+# ===== 機密：密碼、金鑰、憑證 =====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*.json
+*service-account*.json
+gcp-key*.json
+client_secret*.json
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# ===== 資料與快照（可重抓，不進版控）=====
+data/
+raw/
+snapshots/
+*.csv
+*.parquet
+*.sqlite
+*.db
+
+# ===== Docker / 資料庫 volume =====
+mysql_data/
+db_data/
+pgdata/
+
+# ===== Airflow 本機產物 =====
+logs/
+airflow.db
+airflow-webserver.pid
+unittests.cfg
+
+# ===== Celery =====
+celerybeat-schedule*
+celerybeat.pid
+
+# ===== Terraform（若之後用到）=====
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# ===== 編輯器與系統檔 =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.drawio.bkp
+*.drawio.dtmp
+~$*
