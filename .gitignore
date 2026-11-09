@@ -58,3 +58,4 @@ desktop.ini
 *.drawio.bkp
 *.drawio.dtmp
 ~$*
+scripts/run_daily.bat

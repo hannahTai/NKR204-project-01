@@ -1,2 +1,4 @@
 # 統一用 LF 換行：Windows 和 WSL/Linux 共用同一份程式碼時，避免出現只有換行字元不同的假變更
 * text=auto eol=lf
+# Windows 批次檔必須用 CRLF，否則 cmd 可能讀錯
+*.bat text eol=crlf

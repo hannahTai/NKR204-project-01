@@ -2,7 +2,7 @@
 
 檔案格式（信封）：
     {
-      "meta": {"source", "key", "url", "http_status", "body_format", "fetched_at"},
+      "meta": {"source", "key", "url", "request_body", "http_status", "body_format", "fetched_at"},
       "body": API 回應（JSON 就存 JSON；不是 JSON 就存原始文字）
     }
 
@@ -35,6 +35,7 @@ def save_raw(
     url: str,
     http_status: int,
     ok: bool = True,
+    request_body: dict | None = None,
 ) -> Path:
     """存一份回應，回傳檔案路徑。
 
@@ -44,6 +45,8 @@ def save_raw(
     url:         實際請求的完整網址（含參數），出問題時可以貼到瀏覽器重現
     http_status: HTTP 狀態碼
     ok:          這次請求是否成功；False 時存成 <key>.error.json
+    request_body: POST 請求送出的內容（GET 沒有，傳 None）；
+                  公告來源用 POST，參數不在網址裡，要靠這個欄位才能重現請求
 
     同一個 source + key 再存一次會覆蓋舊檔 → 重跑幾次，檔案數量都一樣
     """
@@ -52,11 +55,12 @@ def save_raw(
             "source": source,
             "key": key,
             "url": url,
+            "request_body": request_body,
             "http_status": http_status,
             # body 是 JSON 還是原始文字；解析程式讀檔時靠這個判斷
             "body_format": "text" if isinstance(body, str) else "json",
             # 帶時區的抓取時間，例如 2026-11-09T22:30:15+08:00
-            # 用途：推算證交所每天幾點發布、追查上游事後更正
+            # 用途：推算上游每天幾點發布、追查上游事後更正
             "fetched_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         },
         "body": body,
@@ -75,3 +79,12 @@ def save_raw(
         json.dump(envelope, f, ensure_ascii=False, indent=2)
 
     return path
+
+
+def load_raw(source: str, key: str) -> dict | None:
+    """讀回一份成功的 raw 檔，回傳整個信封（meta + body）；沒有這個檔就回傳 None。"""
+    path = raw_path(source, key)
+    if not path.exists():
+        return None
+    with path.open(encoding="utf-8") as f:
+        return json.load(f)

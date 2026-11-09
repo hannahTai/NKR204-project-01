@@ -9,7 +9,7 @@ import requests
 
 from crawler.storage.raw import save_raw
 
-# 證交所、觀測站都會擋不像瀏覽器的請求，所以假裝成 Chrome
+# 資料源會擋不像瀏覽器的請求，所以假裝成 Chrome
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -28,17 +28,27 @@ def http_get(url: str, params: dict) -> requests.Response:
     return requests.get(url, params=params, headers=HEADERS, timeout=TIMEOUT)
 
 
-def save_response(source: str, key: str, resp: requests.Response) -> Path:
+def http_post(url: str, body: dict) -> requests.Response:
+    """發 POST 請求（body 以 JSON 送出），回傳 HTTP 回應（不檢查成敗）。"""
+    return requests.post(url, json=body, headers=HEADERS, timeout=TIMEOUT)
+
+
+def parse_body(resp: requests.Response) -> dict | list | str:
+    """回應是 JSON 就回傳解析後的資料；不是（例如 HTML 錯誤頁）就回傳原始文字。"""
+    try:
+        return resp.json()
+    except ValueError:
+        return resp.text
+
+
+def save_response(source: str, key: str, resp: requests.Response,
+                  request_body: dict | None = None) -> Path:
     """把一個 HTTP 回應存成 raw 檔，再判斷成敗；失敗時存完才報錯。
 
     先存再報錯：被擋的時候對方會回 HTML 錯誤頁，
     存下來才看得到它到底回了什麼，而不是只剩一行 Python 錯誤訊息。
     """
-    # 回應是不是 JSON？不是的話（例如 HTML 錯誤頁）就保留原始文字
-    try:
-        body = resp.json()
-    except ValueError:
-        body = resp.text
+    body = parse_body(resp)
 
     ok = resp.ok and not isinstance(body, str)   # resp.ok = 狀態碼 2xx
 
@@ -47,6 +57,7 @@ def save_response(source: str, key: str, resp: requests.Response) -> Path:
         url=resp.url,                # 含參數的完整網址
         http_status=resp.status_code,
         ok=ok,
+        request_body=request_body,   # POST 的參數（GET 為 None）
     )
 
     if not ok:
