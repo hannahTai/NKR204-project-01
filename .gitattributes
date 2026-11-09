@@ -1,0 +1,2 @@
+# 統一用 LF 換行：Windows 和 WSL/Linux 共用同一份程式碼時，避免出現只有換行字元不同的假變更
+* text=auto eol=lf

@@ -1,46 +1,43 @@
+"""證交所資料擷取：只寫「每個端點的網址和參數」，其餘交給 common.py。
+
+命名規則：
+  fetch_xxx   → 只打 API，回傳 HTTP 回應，不判斷成敗、不留下任何檔案
+  extract_xxx → fetch＋存成 raw 檔＋判斷成敗（回補、Airflow 呼叫這個）
+"""
+from pathlib import Path
+
 import requests
 
 from crawler.config import TWSE_BASE
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
-    ),
-    "Accept": "application/json",
-}
-
-TIMEOUT = 30
+from crawler.extract.common import http_get, save_response
 
 
-def fetch_notice(date: str) -> dict:
-    """抓某一個交易日的注意股（全部上市股票）。
+def fetch_notice(date: str) -> requests.Response:
+    """打證交所注意股 API，回傳 HTTP 回應（不檢查成敗）。
 
     date: 西元 YYYYMMDD，例如 "20261106"
-    回傳: API 回應的 JSON（dict），原封不動
 
-    每日排程和回補都用這個函式：每日 = 抓今天，回補 = 一天一天呼叫。
+    注意：沒開市的日子也回 stat="OK"，只是 data 為空、total 為 0。
+    所以不能用 stat 判斷有沒有資料，也不能用 total==0 判斷是否為交易日。
     """
-    url = f"{TWSE_BASE}/announcement/notice"
-    params = {
-        "response": "json",
-        "querytype": "1",
-        "startDate": date,
-        "endDate": date,      # 起訖同一天 = 只抓這一天
-        "sortKind": "DATE",   # 依日期排序
-    }
-    # params 交給 requests 組網址：它會自動處理 ? 和 &，以及特殊字元的編碼
-    resp = requests.get(url, params=params, headers=HEADERS, timeout=TIMEOUT)
-
-    # HTTP 狀態碼不是 2xx（例如 403 被擋、500 伺服器錯誤）就直接丟出例外，
-    # 不要讓錯誤的回應被當成正常資料往下傳
-    resp.raise_for_status()
-
-    return resp.json()
+    return http_get(
+        f"{TWSE_BASE}/announcement/notice",
+        {
+            "response": "json",
+            "querytype": "1",
+            "startDate": date,
+            "endDate": date,      # 起訖同一天 = 只抓這一天
+            "sortKind": "DATE",   # 依日期排序
+        },
+    )
 
 
-if __name__ == "__main__":
-    for d in ["20261106", "20261108"]:   # 週五（交易日）、週日（沒開市）
-        result = fetch_notice(d)
-        print(result)
-        print("-----")
+def extract_notice(date: str) -> Path:
+    """抓某一天的注意股並存成 raw 檔，回傳檔案路徑。
+
+    成功：data/raw/twse_notice/<date>.json（同一天重跑會覆蓋，檔案數量不變）
+    失敗：data/raw/twse_notice/<date>.error.json，然後丟出例外
+    沒開市的日子也算成功、照樣存（data 是空的）：
+    存了才分得出「查過、確實沒資料」和「根本沒查」。
+    """
+    return save_response("twse_notice", date, fetch_notice(date))
