@@ -1,4 +1,4 @@
-"""日期工具。"""
+"""日期工具（utility）：西元／民國換算、日期與月份範圍。各層共用，不含任何業務邏輯。"""
 import calendar
 import re
 from datetime import date, datetime, timedelta

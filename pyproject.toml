@@ -13,6 +13,7 @@ dependencies = [
     "sqlalchemy>=2.0",
     "pymysql>=1.1",
     "python-dotenv>=1.0",
+    "dotenv>=0.9.9",
 ]
 
 [build-system]

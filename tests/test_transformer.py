@@ -1,4 +1,4 @@
-"""注意股解析的測試：用真實回應裡的資料列當測試資料，不連網路、不讀 data/。
+"""transformer 的測試（注意股）：用真實回應裡的資料列當測試資料，不連網路、不讀 data/。
 
 執行：uv run pytest
 """
@@ -8,12 +8,13 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from crawler.staging.clean import cn_number, strip_html, to_number
-from crawler.staging.notice import EXPECTED_FIELDS, to_frame, transform
-from crawler.utils.dates import roc_to_date, roc_to_dates
+from crawler.date_utils import roc_to_date, roc_to_dates
+from crawler.transformer import (
+    NOTICE_FIELDS, cn_number, notice_to_frame, strip_html, to_number, transform_notice,
+)
 
 
-def envelope(rows, fields=EXPECTED_FIELDS):
+def envelope(rows, fields=NOTICE_FIELDS):
     """組一個最小的 raw 信封。"""
     return {"meta": {}, "body": {"stat": "OK", "fields": fields, "data": rows}}
 
@@ -28,8 +29,8 @@ ROW_TENGHUI = [1, "6672", "騰輝電子-KY", "38",
                "115.11.06", "1,463.00", "69.94"]
 
 
-def run(*rows, fields=EXPECTED_FIELDS):
-    return transform(to_frame([envelope(list(rows), fields)]))
+def run(*rows, fields=NOTICE_FIELDS):
+    return transform_notice(notice_to_frame([envelope(list(rows), fields)]))
 
 
 def test_clean_helpers():
@@ -84,7 +85,7 @@ def test_empty_day_returns_empty_frames():
 def test_changed_fields_raise():
     """上游改了欄位要報錯，不能默默解析出錯的資料。"""
     with pytest.raises(ValueError, match="欄位"):
-        to_frame([envelope([ROW_ANDES[:2]], fields=["編號", "證券代號"])])
+        notice_to_frame([envelope([ROW_ANDES[:2]], fields=["編號", "證券代號"])])
 
 
 def test_missing_clause_raises():
