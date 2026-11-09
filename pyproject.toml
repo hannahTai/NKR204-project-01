@@ -9,6 +9,10 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "requests>=2.34.2",
+    "pandas>=2.2",
+    "sqlalchemy>=2.0",
+    "pymysql>=1.1",
+    "python-dotenv>=1.0",
 ]
 
 [build-system]
@@ -17,3 +21,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["crawler"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

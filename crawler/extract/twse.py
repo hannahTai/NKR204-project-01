@@ -21,7 +21,7 @@ import requests
 
 from crawler.config import TWSE_BASE, TWSE_OPENAPI_BASE
 from crawler.extract.common import http_get, parse_body, save_response
-from crawler.utils.dates import DATE_FMT, roc_to_ymd, shift
+from crawler.utils.dates import DATE_FMT, roc_to_date, shift
 
 
 # ---------- 注意股 ----------
@@ -108,8 +108,8 @@ def notetrans_key(body: dict | list | str) -> str:
     用資料日期而不是抓取日期：週末抓到的是週五的名單，key 應該是週五。
     """
     title = body.get("title", "") if isinstance(body, dict) else ""
-    m = re.search(r"(\d+)年(\d+)月(\d+)日", title)
-    return roc_to_ymd(*m.groups()) if m else date.today().strftime(DATE_FMT)
+    m = re.search(r"\d+年\d+月\d+日", title)
+    return roc_to_date(m.group()).strftime(DATE_FMT) if m else date.today().strftime(DATE_FMT)
 
 
 def extract_notetrans() -> Path:

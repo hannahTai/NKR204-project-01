@@ -88,3 +88,11 @@ def load_raw(source: str, key: str) -> dict | None:
         return None
     with path.open(encoding="utf-8") as f:
         return json.load(f)
+
+
+def list_raw(source: str) -> list[str]:
+    """某個來源所有「成功」的 raw 檔的 key，依名稱排序（失敗的 .error.json 不列）。"""
+    folder = RAW_DIR / source
+    if not folder.exists():
+        return []
+    return sorted(p.stem for p in folder.glob("*.json") if not p.name.endswith(".error.json"))
