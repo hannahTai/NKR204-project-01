@@ -1,0 +1,1 @@
+TWSE_BASE = "https://www.twse.com.tw/rwd/zh"
