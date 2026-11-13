@@ -1,15 +1,17 @@
-"""transformer 的測試：用真實回應的資料列，不連網路、不讀 data/。執行：uv run pytest"""
+"""stage_data_transform 的測試：用真實回應的資料列，不連網路、不讀 data/。執行：uv run pytest"""
+import datetime
 import math
-from datetime import date
+import warnings
 
 import pandas as pd
 import pytest
 
 from crawler.date_utils import roc_to_date, roc_to_dates
-from crawler.transformer import (
+from crawler.transform_utils import chinese_number, strip_html, to_number
+from crawler.stage_data_transform import (
     MARKET_DAILY_FIELDS, HOLIDAY_FIELDS, PUNISH_WATCHLIST_FIELDS, NOTICE_FIELDS, PUNISH_FIELDS,
-    announcement_to_frame, chinese_number, market_daily_to_frame, holiday_to_frame, punish_watchlist_to_frame,
-    notice_to_frame, punish_to_frame, strip_html, to_number, transform_announcement,
+    announcement_to_frame, market_daily_to_frame, holiday_to_frame, punish_watchlist_to_frame,
+    notice_to_frame, punish_to_frame, transform_announcement,
     transform_company, transform_holiday, transform_punish_watchlist, transform_notice,
     transform_punish, transform_trading_day,
 )
@@ -35,8 +37,8 @@ def run(*rows, fields=NOTICE_FIELDS):
 
 
 def test_clean_helpers():
-    assert roc_to_date("115年11月06日") == date(2026, 11, 6)
-    assert roc_to_dates(pd.Series(["115.11.06", "115/10/01"])).tolist() == [date(2026, 11, 6), date(2026, 10, 1)]
+    assert roc_to_date("115年11月06日") == datetime.date(2026, 11, 6)
+    assert roc_to_dates(pd.Series(["115.11.06", "115/10/01"])).tolist() == [datetime.date(2026, 11, 6), datetime.date(2026, 10, 1)]
     nums = to_number(pd.Series(["1,450.00", "-----", ""])).tolist()
     assert nums[0] == 1450.0 and math.isnan(nums[1]) and math.isnan(nums[2])
     assert [chinese_number(s) for s in ["一", "九", "十", "十三", "十四"]] == [1, 9, 10, 13, 14]
@@ -52,9 +54,9 @@ def test_to_number_rejects_garbage():
 def test_basic_row():
     notices, clauses = run(ROW_ANDES)
     row = notices.iloc[0]
-    assert (row["trade_date"], row["stock_id"], row["stock_name"], row["close_price"]) == (date(2026, 11, 6), "6533", "晶心科", 202.0)
+    assert (row["trade_date"], row["stock_id"], row["stock_name"], row["close_price"]) == (datetime.date(2026, 11, 6), "6533", "晶心科", 202.0)
     assert math.isnan(row["pe_ratio"])
-    assert clauses.to_dict("records") == [{"trade_date": date(2026, 11, 6), "stock_id": "6533", "clause": 1}]
+    assert clauses.to_dict("records") == [{"trade_date": datetime.date(2026, 11, 6), "stock_id": "6533", "clause": 1}]
 
 
 def test_html_stripped_and_multiple_clauses():
@@ -105,7 +107,7 @@ def test_punish_parses_period_and_minutes():
     df = transform_punish(punish_to_frame([envelope([PUNISH_ROW], PUNISH_FIELDS)]))
     row = df.iloc[0]
     assert (row["announce_date"], row["period_start"], row["period_end"]) == (
-        date(2026, 11, 6), date(2026, 11, 9), date(2026, 11, 13))
+        datetime.date(2026, 11, 6), datetime.date(2026, 11, 9), datetime.date(2026, 11, 13))
     assert row["match_interval_minutes"] == 2 and row["measure_type"] == "第一次處置" and not row["has_star_mark"]
 
 
@@ -113,18 +115,37 @@ def test_punish_dedup_keeps_latest_fetch():
     """同一筆公告出現在好幾天的 raw 裡 → 只留一筆，而且是最後抓到的版本。"""
     newer = PUNISH_ROW.copy()
     newer[3] = "致茂（新）"
-    df = transform_punish(punish_to_frame([
-        envelope([newer], PUNISH_FIELDS, fetched_at="2026-11-09T22:00:00+08:00"),
-        envelope([PUNISH_ROW], PUNISH_FIELDS, fetched_at="2026-11-09T21:00:00+08:00"),
-    ]))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")   # 不同份 raw 的新舊版本是正常情況，不該警告
+        df = transform_punish(punish_to_frame([
+            envelope([newer], PUNISH_FIELDS, fetched_at="2026-11-09T22:00:00+08:00"),
+            envelope([PUNISH_ROW], PUNISH_FIELDS, fetched_at="2026-11-09T21:00:00+08:00"),
+        ]))
     assert len(df) == 1 and df.iloc[0]["stock_name"] == "致茂（新）"
+
+
+def test_punish_two_in_one_raw_warns():
+    """同一份 raw 裡同一檔同一天有兩則不同的處置 → 警告（去重只會留一則）。"""
+    other = PUNISH_ROW.copy()
+    other[7] = "第二次處置"
+    with pytest.warns(UserWarning, match="同一天同一檔有多則處置"):
+        df = transform_punish(punish_to_frame([envelope([PUNISH_ROW, other], PUNISH_FIELDS)]))
+    assert len(df) == 1
+
+
+def test_punish_identical_rows_in_one_raw_no_warning():
+    """同一份 raw 裡完全相同的兩列只是重複，不警告。"""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        df = transform_punish(punish_to_frame([envelope([PUNISH_ROW, PUNISH_ROW], PUNISH_FIELDS)]))
+    assert len(df) == 1
 
 
 def test_punish_star_kept_as_flag():
     row = PUNISH_ROW.copy()
     row[1] = "*115/11/09"
     df = transform_punish(punish_to_frame([envelope([row], PUNISH_FIELDS)]))
-    assert df.iloc[0]["has_star_mark"] and df.iloc[0]["announce_date"] == date(2026, 11, 9)
+    assert df.iloc[0]["has_star_mark"] and df.iloc[0]["announce_date"] == datetime.date(2026, 11, 9)
 
 
 # ---------- 注意累計名單 ----------
@@ -132,7 +153,7 @@ def test_punish_watchlist_date_from_title_and_br_split():
     raw = envelope([[1, "2455", "全新", "連續二次<br>九個營業日已有五次"]], PUNISH_WATCHLIST_FIELDS,
                    title="115年11月06日 公布注意累計次數可能達處置標準之有價證券一覽表")
     df = transform_punish_watchlist(punish_watchlist_to_frame([raw]))
-    assert df.iloc[0]["data_date"] == date(2026, 11, 6)
+    assert df.iloc[0]["data_date"] == datetime.date(2026, 11, 6)
     assert df.iloc[0]["progress_text"] == "連續二次\n九個營業日已有五次"
 
 
@@ -146,7 +167,7 @@ def test_trading_day_numbers_and_dedup():
 
 def test_holiday_is_western_date():
     df = transform_holiday(holiday_to_frame([envelope([["2026-10-09", "國慶日", "補假"]], HOLIDAY_FIELDS)]))
-    assert df.iloc[0]["holiday_date"] == date(2026, 10, 9)
+    assert df.iloc[0]["holiday_date"] == datetime.date(2026, 10, 9)
 
 
 # ---------- 公司、重大訊息 ----------
@@ -154,7 +175,7 @@ def test_company_snapshot():
     raw = {"meta": {"key": "20261109"},
            "body": [{"公司代號": "1101", "公司簡稱": "台泥", "公司名稱": "臺灣水泥", "產業別": "01", "上市日期": "19620209"}]}
     row = transform_company(raw).iloc[0]
-    assert (row["company_id"], row["listed_date"], row["snapshot_date"]) == ("1101", date(1962, 2, 9), date(2026, 11, 9))
+    assert (row["company_id"], row["listed_date"], row["snapshot_date"]) == ("1101", datetime.date(1962, 2, 9), datetime.date(2026, 11, 9))
 
 
 def test_announcement_serial_and_joined_subject():
@@ -163,7 +184,7 @@ def test_announcement_serial_and_joined_subject():
              {"parameters": {"serialNumber": "2"}}]]
     raw = {"meta": {}, "body": {"code": 200, "result": {"titles": titles, "data": data}}}
     row = transform_announcement(announcement_to_frame([raw])).iloc[0]
-    assert (row["announce_date"], row["serial_number"]) == (date(2026, 9, 1), 2)
+    assert (row["announce_date"], row["serial_number"]) == (datetime.date(2026, 9, 1), 2)
     assert row["subject"] == "因本公司有價證券達標準，故公布重大訊息"
 
 

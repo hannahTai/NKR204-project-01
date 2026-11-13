@@ -59,3 +59,6 @@ desktop.ini
 *.drawio.dtmp
 ~$*
 scripts/run_daily.bat
+# 暫時的公布時間實測（只在本機跑，收集完就刪）
+crawler/probe_publish_time.py
+scripts/run_probe.bat

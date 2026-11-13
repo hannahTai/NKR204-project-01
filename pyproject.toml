@@ -16,6 +16,7 @@ dependencies = [
     "tzdata",   # Windows 沒有內建時區資料庫，zoneinfo 要靠這個套件
     "dotenv>=0.9.9",
     "pytest>=9.2.0",
+    "pyarrow>=26.0.1",
 ]
 
 [build-system]

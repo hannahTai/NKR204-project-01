@@ -1,5 +1,5 @@
--- stage 層：raw 解析後的乾淨資料，一列 = 官方公告的一個事實，不做業務判斷
--- 由 crawler.repository.init_db() 執行；表已存在就跳過
+-- stage 層（表名開頭 stage_）：raw 解析後的乾淨資料，一列 = 官方公告的一個事實，不做業務判斷
+-- 由 crawler.mysql.create_tables() 執行；已存在就跳過
 
 CREATE TABLE IF NOT EXISTS stage_notice (
     trade_date  DATE           NOT NULL COMMENT '交易日',

@@ -4,56 +4,12 @@
 欄位用整欄運算（.str、to_numeric），不用逐列迴圈。
 """
 import re
+import warnings
 
 import pandas as pd
 
 from crawler.date_utils import roc_to_date, roc_to_dates
-
-CHINESE_DIGITS = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
-
-
-# ---------- 共用工具 ----------
-def strip_html(s: pd.Series) -> pd.Series:
-    """去掉 HTML 標籤。"""
-    return s.str.replace(r"<[^>]+>", "", regex=True).str.strip()
-
-
-def to_number(s: pd.Series) -> pd.Series:
-    """'1,450.00' → 1450.0；'-----' 或空字串 → NaN；其他看不懂的值直接報錯。"""
-    s = s.str.replace(",", "").str.strip()
-    s = s.mask(s.str.fullmatch(r"-*"))
-    return pd.to_numeric(s)
-
-
-def chinese_number(text: str) -> int:
-    """一～九十九 → int。
-
-    >>> chinese_number("十"), chinese_number("十三"), chinese_number("二十五")
-    (10, 13, 25)
-    """
-    if "十" not in text:
-        return CHINESE_DIGITS[text]
-    tens, _, ones = text.partition("十")
-    return CHINESE_DIGITS.get(tens, 1) * 10 + CHINESE_DIGITS.get(ones, 0)
-
-
-def rows_to_frame(raws: list[dict], fields: list[str], name: str, extra: dict | None = None) -> pd.DataFrame:
-    """把多份 raw 的 data 合成一個 DataFrame。
-
-    fields：預期的官方欄位，不一致就報錯（上游改版）。
-    extra：每份 raw 額外加的欄位，{欄名: 函式(raw)}。
-    """
-    extra = extra or {}
-    rows = []
-    for raw in raws:
-        body = raw["body"]
-        if not body.get("data"):
-            continue
-        if body.get("fields") != fields:
-            raise ValueError(f"{name}欄位改變：{body.get('fields')}")
-        added = [func(raw) for func in extra.values()]
-        rows += [row + added for row in body["data"]]
-    return pd.DataFrame(rows, columns=fields + list(extra))
+from crawler.transform_utils import chinese_number, fetched_at, rows_to_frame, strip_html, to_number
 
 
 # ---------- 注意股 ----------
@@ -95,6 +51,7 @@ def transform_notice(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 # ---------- 處置股 ----------
 # 同一筆公告會出現在好幾天的 raw → 依（公布日期, 代號）去重，留最後抓到的
+# 同一份 raw 裡（公布日期, 代號）重複且內容不同 → 同一天有兩則處置，去重只會留一則，所以發出警告
 # 丟掉的欄位：編號、累計（隨查詢區間變動）、備註（只有連結）
 # 公布日期偶爾帶 *（意義未確認），存成 has_star_mark
 PUNISH_FIELDS = ["編號", "公布日期", "證券代號", "證券名稱", "累計", "處置條件",
@@ -102,8 +59,8 @@ PUNISH_FIELDS = ["編號", "公布日期", "證券代號", "證券名稱", "累�
 
 
 def punish_to_frame(raws: list[dict]) -> pd.DataFrame:
-    raws = sorted(raws, key=lambda raw: raw["meta"]["fetched_at"])   # 舊 → 新
-    return rows_to_frame(raws, PUNISH_FIELDS, "處置股")
+    raws = sorted(raws, key=fetched_at)   # 舊 → 新
+    return rows_to_frame(raws, PUNISH_FIELDS, "處置股", extra={"fetched_at": fetched_at})   # 用來分辨每列來自哪份 raw
 
 
 def transform_punish(df: pd.DataFrame) -> pd.DataFrame:
@@ -122,6 +79,11 @@ def transform_punish(df: pd.DataFrame) -> pd.DataFrame:
         "content": df["處置內容"].str.strip(),
         "has_star_mark": df["公布日期"].str.startswith("*"),
     })
+    same_raw = out.assign(fetched_at=df["fetched_at"]).drop_duplicates()   # 完全相同的列不算
+    conflicts = same_raw[same_raw.duplicated(["fetched_at", "announce_date", "stock_id"], keep=False)]
+    if not conflicts.empty:
+        listed = conflicts[["announce_date", "stock_id", "measure_type"]].drop_duplicates().to_string(index=False)
+        warnings.warn(f"處置股：同一天同一檔有多則處置，只會留下一則，請確認：\n{listed}")
     out = out.drop_duplicates(["announce_date", "stock_id"], keep="last")
     return out.sort_values(["announce_date", "stock_id"]).reset_index(drop=True)
 

@@ -1,11 +1,11 @@
 """設定：從環境變數讀取（可寫在專案根目錄的 .env），讀不到就用預設值。"""
 import os
-from pathlib import Path
+import pathlib
 
-from dotenv import load_dotenv
+import dotenv
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent   # crawler/ 的上一層
-load_dotenv(PROJECT_ROOT / ".env")                      # 已有的環境變數不會被覆蓋
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent   # crawler/ 的上一層
+dotenv.load_dotenv(PROJECT_ROOT / ".env")                       # 已有的環境變數不會被覆蓋
 
 # 資料來源
 TWSE_BASE = os.environ.get("TWSE_BASE", "https://www.twse.com.tw/rwd/zh")
@@ -17,12 +17,12 @@ SLEEP_SECONDS = float(os.environ.get("SLEEP_SECONDS", "1.0"))
 SLEEP_SECONDS_MOPS = float(os.environ.get("SLEEP_SECONDS_MOPS", "0.6"))
 
 # 存放位置
-RAW_DIR = Path(os.environ.get("RAW_DIR", PROJECT_ROOT / "data" / "raw"))
-CSV_OUTPUT_DIR = Path(os.environ.get("CSV_OUTPUT_DIR", PROJECT_ROOT / "data" / "stage"))
+RAW_DIR = pathlib.Path(os.environ.get("RAW_DIR", PROJECT_ROOT / "data" / "raw"))
+STAGE_DIR = pathlib.Path(os.environ.get("STAGE_DIR", PROJECT_ROOT / "data" / "stage"))   # T 的產出（parquet＋manifest），L 從這裡讀
 
 # MySQL
 MYSQL_HOST = os.environ.get("MYSQL_HOST", "127.0.0.1")
 MYSQL_PORT = int(os.environ.get("MYSQL_PORT", 3306))
 MYSQL_ACCOUNT = os.environ.get("MYSQL_ACCOUNT", "root")
 MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD", "")
-MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE", "notice_tracker")
+MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE", "tw_stock")
