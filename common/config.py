@@ -4,7 +4,7 @@ import pathlib
 
 import dotenv
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent   # crawler/ 的上一層
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent   # common/ 的上一層
 dotenv.load_dotenv(PROJECT_ROOT / ".env")                       # 已有的環境變數不會被覆蓋
 
 # 資料來源

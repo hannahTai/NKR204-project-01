@@ -6,9 +6,9 @@ import warnings
 import pandas as pd
 import pytest
 
-from crawler.date_utils import roc_to_date, roc_to_dates
-from crawler.transform_utils import chinese_number, strip_html, to_number
-from crawler.stage_data_transform import (
+from common.date_utils import roc_to_date, roc_to_dates
+from pipeline.transform.utils import chinese_number, strip_html, to_number
+from pipeline.transform.rules import (
     MARKET_DAILY_FIELDS, HOLIDAY_FIELDS, PUNISH_WATCHLIST_FIELDS, NOTICE_FIELDS, PUNISH_FIELDS,
     announcement_to_frame, market_daily_to_frame, holiday_to_frame, punish_watchlist_to_frame,
     notice_to_frame, punish_to_frame, transform_announcement,

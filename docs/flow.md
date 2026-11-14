@@ -1,9 +1,9 @@
 # 執行流程
 
 ```
-E 抓資料  extract_raw.py           API ──→ data/raw/<來源>/<key>.json
-T 轉換    transform_stage.py       raw ──→ data/stage/<表名>.parquet ＋ manifest.json
-L 載入    load_stage_to_mysql.py   parquet ──→ MySQL stage_* 表
+E 抓資料  pipeline/extract/producer.py   API ──→ data/raw/<來源>/<key>.json
+T 轉換    pipeline/transform/stage.py    raw ──→ data/stage/<表名>.parquet ＋ manifest.json
+L 載入    pipeline/load/mysql.py         parquet ──→ MySQL stage_* 表
 ```
 
 - T 只讀 raw、不連網路也不連資料庫；整理規則改了只要重跑 T、L。
@@ -36,7 +36,7 @@ L 載入    load_stage_to_mysql.py   parquet ──→ MySQL stage_* 表
 
 ## T 轉換
 
-讀全部 raw，用 `stage_data_transform.py` 整理成各表，每張表存成一個 parquet（完整內容），最後寫 `manifest.json` 代表寫完了。加 `--csv` 另外輸出 CSV，方便用 Excel 檢查。
+讀全部 raw，用 `transform/rules.py` 整理成各表，每張表存成一個 parquet（完整內容），最後寫 `manifest.json` 代表寫完了。加 `--csv` 另外輸出 CSV，方便用 Excel 檢查。
 
 ## L 載入
 
@@ -49,10 +49,10 @@ L 載入    load_stage_to_mysql.py   parquet ──→ MySQL stage_* 表
 在專案根目錄執行：
 
 ```
-uv run python -m crawler.extract_raw                               # 抓今天（daily ＝ 只有今天的 init）
-uv run python -m crawler.extract_raw init --start 20261001         # 回補到今天（可加 --end、--refetch）
-uv run python -m crawler.transform_stage                           # T：raw → parquet
-uv run python -m crawler.load_stage_to_mysql                       # L：parquet → MySQL（欄位改了加 --recreate）
+uv run python -m pipeline.extract.producer                         # 抓今天（daily ＝ 只有今天的 init）
+uv run python -m pipeline.extract.producer init --start 20261001   # 回補到今天（可加 --end、--refetch）
+uv run python -m pipeline.transform.stage                          # T：raw → parquet
+uv run python -m pipeline.load.mysql                               # L：parquet → MySQL（欄位改了加 --recreate）
 uv run pytest                                                      # 跑測試
 ```
 

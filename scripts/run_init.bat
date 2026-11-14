@@ -1,5 +1,5 @@
 @echo off
-rem Backfill: fetch raw files for a date range (crawler/extract_raw.py init), then T raw to parquet (transform_stage) -> L parquet to MySQL (load_stage_to_mysql).
+rem Backfill: fetch raw files for a date range (pipeline/extract/producer.py init), then T raw to parquet (pipeline.transform.stage) -> L parquet to MySQL (pipeline.load.mysql).
 rem Usage:  scripts\run_init.bat 20261001            (20261001 to today)
 rem         scripts\run_init.bat 20261001 20261031   (fixed range)
 rem Double-click also works: it asks for the start date.
@@ -23,13 +23,13 @@ if not "%END%"=="" set END_ARG=--end %END%
 
 if not exist data mkdir data
 echo ===== %date% %time% init %START% %END% >> data\init.log
-uv run python -m crawler.extract_raw init --start %START% %END_ARG%
+uv run python -m pipeline.extract.producer init --start %START% %END_ARG%
 set FETCH_EXIT=%errorlevel%
 
 rem Rebuild stage even if some fetches failed: stage is rebuilt from whatever raw exists.
 echo ----- stage
-uv run python -m crawler.transform_stage
-if not errorlevel 1 uv run python -m crawler.load_stage_to_mysql
+uv run python -m pipeline.transform.stage
+if not errorlevel 1 uv run python -m pipeline.load.mysql
 set STAGE_EXIT=%errorlevel%
 
 echo fetch exit %FETCH_EXIT%, stage exit %STAGE_EXIT% >> data\init.log

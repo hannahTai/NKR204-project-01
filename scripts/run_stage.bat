@@ -1,5 +1,5 @@
 @echo off
-rem Rebuild the stage tables after running the tests: T raw to parquet (transform_stage) -> L parquet to MySQL (load_stage_to_mysql).
+rem Rebuild the stage tables after running the tests: T raw to parquet (pipeline.transform.stage) -> L parquet to MySQL (pipeline.load.mysql).
 rem Output is appended to data\stage.log
 rem (Comments are in English on purpose: cmd may misread UTF-8 Chinese in .bat files.)
 
@@ -15,10 +15,10 @@ if errorlevel 1 (
     echo tests failed, stage not rebuilt >> data\stage.log
     exit /b 1
 )
-uv run python -m crawler.transform_stage >> data\stage.log 2>&1
+uv run python -m pipeline.transform.stage >> data\stage.log 2>&1
 if errorlevel 1 (
     echo transform failed, not loaded >> data\stage.log
     exit /b 1
 )
-uv run python -m crawler.load_stage_to_mysql >> data\stage.log 2>&1
+uv run python -m pipeline.load.mysql >> data\stage.log 2>&1
 echo exit code %errorlevel% >> data\stage.log

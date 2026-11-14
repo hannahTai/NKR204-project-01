@@ -1,11 +1,11 @@
-"""T（transform_stage）→ L（load_stage_to_mysql）之間的 parquet＋manifest：不連資料庫。執行：uv run pytest"""
+"""T（pipeline.transform.stage）→ L（pipeline.load.mysql）之間的 parquet＋manifest：不連資料庫。執行：uv run pytest"""
 import datetime
 
 import pandas as pd
 import pytest
 
-from crawler import load_stage_to_mysql as load
-from crawler import transform_stage as transform
+from pipeline.load import mysql as load
+from pipeline.transform import stage as transform
 
 
 @pytest.fixture

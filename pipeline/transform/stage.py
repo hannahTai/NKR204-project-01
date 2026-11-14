@@ -1,20 +1,21 @@
 """T（轉換）：把 data/raw/ 的原始 JSON 整理成 8 張表，每張表存成一個 parquet。
 
-    uv run python -m crawler.transform_stage         # 產出 data/stage/<表名>.parquet
-    uv run python -m crawler.transform_stage --csv   # 另外輸出 CSV（方便用 Excel 檢查）
+    uv run python -m pipeline.transform.stage         # 產出 data/stage/<表名>.parquet
+    uv run python -m pipeline.transform.stage --csv   # 另外輸出 CSV（方便用 Excel 檢查）
 
 流程：讀 raw → 轉成表 → 存檔。不連網路、不連資料庫，可以放心重跑。
 每次都從全部 raw 重算，轉換規則改了會自動套用到所有日期。
-真正的轉換規則寫在 stage_data_transform.py，這支只負責讀檔、呼叫轉換、存檔。
+真正的轉換規則寫在 rules.py，這支只負責讀檔、呼叫轉換、存檔。
 """
 import argparse
 import json
 
 import pandas as pd
 
-from crawler import date_utils, raw_file
-from crawler import stage_data_transform as t
-from crawler.config import STAGE_DIR
+from common import date_utils
+from pipeline.extract import raw_file
+from pipeline.transform import rules as t
+from common.config import STAGE_DIR
 
 MANIFEST_PATH = STAGE_DIR / "manifest.json"
 
@@ -47,7 +48,7 @@ def load_raws() -> dict[str, list[dict]]:
 def build_tables(raws: dict[str, list[dict]]) -> dict[str, pd.DataFrame]:
     """把 raw 轉成 8 張表，回傳 {表名: DataFrame}。
 
-    大多分兩步，都寫在 stage_data_transform.py：
+    大多分兩步，都寫在 rules.py：
       xxx_to_frame：把每份 raw 的資料列攤平成一張表
       transform_xxx：清理、轉換（民國轉西元、去 HTML、文字轉數字、去重複）
     """

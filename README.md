@@ -68,3 +68,30 @@ TibaMe 資料工程專題（NKR204），個人製作。2026/11 起實作，預�
 | 測試 | pytest：款次解析、規則引擎（以官方處置公告為答案）、重跑冪等 |
 
 設計原則：**每日＝回補一天**（同一套任務只差日期，重跑筆數不變）；**raw 與計算分層**（規則改了從 raw 重算，不必重抓）。
+
+## 專案結構
+
+```
+pipeline/                 資料線：API → raw → stage → MySQL
+├─ extract/                 E 抓資料：API → data/raw/
+│   ├─ producer.py            入口：決定抓哪些任務、依序執行
+│   ├─ tasks.py               任務：抓一份、存成 raw
+│   ├─ api_twse.py            怎麼打證交所 API
+│   ├─ api_mops.py            怎麼打觀測站 API
+│   ├─ http_utils.py          共用的 GET／POST
+│   └─ raw_file.py            raw 檔讀寫
+├─ transform/               T 整理：raw → data/stage/*.parquet
+│   ├─ stage.py               入口：讀 raw、轉換、存 parquet
+│   ├─ rules.py               每張表的轉換規則
+│   └─ utils.py               共用小工具（去 HTML、轉數字）
+└─ load/                    L 載入：parquet → MySQL
+    └─ mysql.py               入口：每張表整張換掉
+common/                   共用：config.py（.env 設定）、date_utils.py、mysql_utils.py
+db/init/                  建表 SQL
+scripts/                  Windows 排程用的 .bat
+tests/                    測試（資料夾對應上面）
+docs/                     流程說明、提案
+data/                     raw／stage 檔案（不進版控）
+```
+
+每一步只從「入口」執行，例如 `uv run python -m pipeline.extract.producer daily`；常用指令見 [`docs/flow.md`](docs/flow.md)。

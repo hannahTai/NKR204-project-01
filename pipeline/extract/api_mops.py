@@ -1,15 +1,15 @@
-"""抓公司重大訊息：一家公司一個月一個請求。
+"""公開資訊觀測站 API：公司重大訊息，一家公司一個月一個請求。
 
-fetch_announcements 打 API 回傳回應；crawler_announcements 存成 raw，回傳檔案路徑。
+這裡只管「怎麼打 API」（網址、參數），回傳原始回應，不存檔。
+存成 raw 檔的是 tasks.py。
 """
 import calendar
-import pathlib
 
 import requests
 
-from crawler import date_utils, raw_file
-from crawler.config import MOPS_BASE
-from crawler.http_utils import http_post
+from common import date_utils
+from common.config import MOPS_BASE
+from pipeline.extract.http_utils import http_post
 
 
 def fetch_announcements(stock_id: str, year: int, month: int) -> requests.Response:
@@ -24,8 +24,3 @@ def fetch_announcements(stock_id: str, year: int, month: int) -> requests.Respon
         "companyId": stock_id, "year": str(year - 1911), "month": str(month),
         "firstDay": "1", "lastDay": str(last_day),
     })
-
-
-def crawler_announcements(stock_id: str, year: int, month: int) -> pathlib.Path:
-    key = f"{stock_id}_{year:04d}{month:02d}"   # 例如 1303_202611
-    return raw_file.save_raw_response("announcements", key, fetch_announcements(stock_id, year, month))

@@ -1,4 +1,4 @@
-"""MySQL 工具：連線、建表、寫入。給 load_stage_to_mysql 用。
+"""MySQL 工具：連線、建表、寫入。給 pipeline.load.mysql 用。
 
 帳號、密碼、主機等設定從 .env 讀（見 config.py）。
 """
@@ -7,7 +7,7 @@ import urllib.parse
 import pandas as pd
 import sqlalchemy
 
-from crawler.config import (MYSQL_ACCOUNT, MYSQL_DATABASE, MYSQL_HOST, MYSQL_PASSWORD, MYSQL_PORT,
+from common.config import (MYSQL_ACCOUNT, MYSQL_DATABASE, MYSQL_HOST, MYSQL_PASSWORD, MYSQL_PORT,
                             PROJECT_ROOT)
 
 # 建表的 SQL 檔：db/init/ 底下所有 .sql，依檔名排序執行（01_xxx.sql、02_xxx.sql…）

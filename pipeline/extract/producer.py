@@ -1,8 +1,8 @@
 """E：決定要抓哪些資料，依序執行，存成 raw。
 
-    uv run python -m crawler.extract_raw                        # 抓今天（daily ＝ 只有今天的 init）
-    uv run python -m crawler.extract_raw init --start 20261001  # 回補到今天（可加 --end、--refetch）
-    uv run python -m crawler.extract_raw daily --source twse    # 只跑證交所（mops：只跑觀測站）
+    uv run python -m pipeline.extract.producer                        # 抓今天（daily ＝ 只有今天的 init）
+    uv run python -m pipeline.extract.producer init --start 20261001  # 回補到今天（可加 --end、--refetch）
+    uv run python -m pipeline.extract.producer daily --source twse    # 只跑證交所（mops：只跑觀測站）
 
 重大訊息規則見 build_mops_jobs。
 """
@@ -12,11 +12,9 @@ import time
 
 import pandas as pd
 
-from crawler import raw_file
-from crawler import tasks_crawler_mops as mops
-from crawler import tasks_crawler_twse as twse
-from crawler.config import SLEEP_SECONDS, SLEEP_SECONDS_MOPS
-from crawler.date_utils import month_end, prev_month, today_yyyymmdd
+from pipeline.extract import raw_file, tasks
+from common.config import SLEEP_SECONDS, SLEEP_SECONDS_MOPS
+from common.date_utils import month_end, prev_month, today_yyyymmdd
 
 
 # ---------- 第一批：證交所 ----------
@@ -27,14 +25,14 @@ def build_twse_jobs(start: str, end: str) -> list[tuple]:
     years = sorted({int(m[:4]) for m in months})
 
     this_year = int(today_yyyymmdd()[:4])
-    jobs = [(twse.crawler_holiday, (y,)) for y in years
+    jobs = [(tasks.download_holiday, (y,)) for y in years
             if y >= this_year or not raw_file.raw_path("holiday", str(y)).exists()]   # 過去的年份不會再變，有檔就跳過
-    jobs += [(twse.crawler_market_daily, (m,)) for m in months]
-    jobs += [(twse.crawler_notice, (d,)) for d in days]
-    jobs += [(twse.crawler_punish, (d,)) for d in days]
-    jobs += [(twse.crawler_companies, ())]              # 查重大訊息前要先有公司清單
+    jobs += [(tasks.download_market_daily, (m,)) for m in months]
+    jobs += [(tasks.download_notice, (d,)) for d in days]
+    jobs += [(tasks.download_punish, (d,)) for d in days]
+    jobs += [(tasks.download_companies, ())]              # 查重大訊息前要先有公司清單
     if end == today_yyyymmdd():
-        jobs += [(twse.crawler_punish_watchlist, ())]   # 只有最新一天，回補時抓不到舊的
+        jobs += [(tasks.download_punish_watchlist, ())]   # 只有最新一天，回補時抓不到舊的
     return jobs
 
 
@@ -63,7 +61,7 @@ def is_complete(stock_id: str, yyyymm: str) -> bool:
 
 
 def announcement_job(stock_id: str, yyyymm: str) -> tuple:
-    return (mops.crawler_announcements, (stock_id, int(yyyymm[:4]), int(yyyymm[4:])))
+    return (tasks.download_announcements, (stock_id, int(yyyymm[:4]), int(yyyymm[4:])))
 
 
 def last_month_gaps(this_month: str, companies: set[str]) -> set[tuple[str, str]]:
@@ -97,11 +95,11 @@ def build_mops_jobs(start: str, end: str, refetch: bool = False) -> list[tuple]:
 def run_jobs(jobs: list[tuple], sleep: float) -> list[str]:
     """依序執行，回傳失敗的任務。單一任務失敗不會中斷整批。
 
-    jobs 例如 [(crawler_notice, ("20261113",)), (crawler_announcements, ("2330", 2026, 11))]
+    jobs 例如 [(download_notice, ("20261113",)), (download_announcements, ("2330", 2026, 11))]
     """
     failed = []
     for func, args in jobs:
-        name = f"{func.__name__}{args}"          # log 用，例如 crawler_notice('20261113',)
+        name = f"{func.__name__}{args}"          # log 用，例如 download_notice('20261113',)
         try:
             path = func(*args)                   # 執行任務：打 API、存檔，回傳檔案路徑（*args 拆開傳入）
             filename = path.name                 # 從路徑取出檔名

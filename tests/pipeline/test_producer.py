@@ -1,12 +1,12 @@
-"""extract_raw 決定要抓哪些重大訊息：用暫存的 raw 目錄，不連網路。執行：uv run pytest"""
+"""producer 決定要抓哪些重大訊息：用暫存的 raw 目錄，不連網路。執行：uv run pytest"""
 import datetime
 import json
 
 import pytest
 
-from crawler import extract_raw as pc
-from crawler import raw_file
-from crawler.date_utils import month_end, prev_month
+from pipeline.extract import producer as pc
+from pipeline.extract import raw_file
+from common.date_utils import month_end, prev_month
 
 
 @pytest.fixture

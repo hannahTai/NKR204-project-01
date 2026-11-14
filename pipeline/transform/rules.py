@@ -8,8 +8,8 @@ import warnings
 
 import pandas as pd
 
-from crawler.date_utils import roc_to_date, roc_to_dates
-from crawler.transform_utils import chinese_number, fetched_at, rows_to_frame, strip_html, to_number
+from common.date_utils import roc_to_date, roc_to_dates
+from pipeline.transform.utils import chinese_number, fetched_at, rows_to_frame, strip_html, to_number
 
 
 # ---------- 注意股 ----------

@@ -4,8 +4,8 @@ import pathlib
 
 import requests
 
-from crawler import date_utils
-from crawler.config import RAW_DIR
+from common import date_utils
+from common.config import RAW_DIR
 
 
 def raw_path(source: str, key: str, ok: bool = True) -> pathlib.Path:
