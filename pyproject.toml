@@ -1,5 +1,5 @@
 [project]
-name = "nkr204-project-02"
+name = "attention-stock-tracker"
 version = "0.1.0"
 description = "台股注意股：還差幾步會被處置"
 readme = "README.md"

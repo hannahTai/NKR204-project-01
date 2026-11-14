@@ -60,7 +60,7 @@ uv run pytest                                                      # 跑測試
 
 ## 排程設定
 
-用 Windows 工作排程器（`Win+R` → `taskschd.msc`），工作名稱 `NKR204-02-daily`。之後改用 Airflow 時取代。
+用 Windows 工作排程器（`Win+R` → `taskschd.msc`），工作名稱 `G2-attention_stock_tracker-daily`。之後改用 Airflow 時取代。
 
 - 觸發：每週一～週五 21:00
 - 動作：`conhost.exe --headless` 執行 `scripts\run_daily.bat`（背景執行，避免視窗被關掉而中斷）
@@ -73,10 +73,10 @@ uv run pytest                                                      # 跑測試
 $action   = New-ScheduledTaskAction -Execute conhost.exe -Argument "--headless cmd.exe /c `"$(Resolve-Path scripts\run_daily.bat)`""
 $trigger  = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At 21:00
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable
-Register-ScheduledTask -TaskName NKR204-02-daily -Action $action -Trigger $trigger -Settings $settings
+Register-ScheduledTask -TaskName G2-attention_stock_tracker-daily -Action $action -Trigger $trigger -Settings $settings
 ```
 
 ```powershell
-Start-ScheduledTask NKR204-02-daily      # 立刻手動執行一次
-Get-ScheduledTaskInfo NKR204-02-daily    # 上次執行時間、結果（0 = 成功）、下次執行時間
+Start-ScheduledTask G2-attention_stock_tracker-daily      # 立刻手動執行一次
+Get-ScheduledTaskInfo G2-attention_stock_tracker-daily    # 上次執行時間、結果（0 = 成功）、下次執行時間
 ```
