@@ -77,10 +77,11 @@ CREATE TABLE IF NOT EXISTS stage_company (
 CREATE TABLE IF NOT EXISTS stage_announcement (
     company_id     VARCHAR(10)   NOT NULL,
     announce_date  DATE          NOT NULL COMMENT '發言日期',
-    serial_number  INT           NOT NULL COMMENT '當日序號',
+    enter_date     DATE          NOT NULL COMMENT '輸入日期（序號依這天編，可能早於發言日期）',
+    serial_number  INT           NOT NULL COMMENT '輸入日期當天的序號',
     announce_time  TIME          NOT NULL COMMENT '發言時間（判斷收盤前／後用）',
     company_name   VARCHAR(50)   NOT NULL,
     subject        TEXT          NOT NULL COMMENT '主旨',
     loaded_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (company_id, announce_date, serial_number)
+    PRIMARY KEY (company_id, enter_date, serial_number)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='公司重大訊息';

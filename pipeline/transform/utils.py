@@ -1,4 +1,4 @@
-"""轉換用的共用工具：給 stage_data_transform 用，不屬於任何一種資料。"""
+"""轉換用的共用工具：給 rules.py 用，不屬於任何一種資料。"""
 import datetime
 
 import pandas as pd
@@ -30,23 +30,38 @@ def chinese_number(text: str) -> int:
     return CHINESE_DIGITS.get(tens, 1) * 10 + CHINESE_DIGITS.get(ones, 0)
 
 
-def rows_to_frame(raws: list[dict], fields: list[str], name: str, extra: dict | None = None) -> pd.DataFrame:
-    """把多份 raw 的 data 合成一個 DataFrame。
+def require_columns(df: pd.DataFrame, needed: list[str], name: str) -> pd.DataFrame:
+    """只留 needed 這幾欄；少了任何一欄就報錯（上游改版，不能默默變成空值）。
 
-    fields：預期的官方欄位，不一致就報錯（上游改版）。
+    官方多加欄位、調整順序都不影響，因為是用欄名取，不是用位置。
+    """
+    missing = [col for col in needed if col not in df.columns]
+    if missing:
+        raise ValueError(f"{name}少了欄位：{missing}（回傳的欄位：{list(df.columns)}）")
+    return df[needed]
+
+
+def rows_to_frame(raws: list[dict], fields: list[str], name: str, extra: dict | None = None) -> pd.DataFrame:
+    """把多份 raw 的 data 合成一個 DataFrame，只留用得到的欄位。
+
+    fields：用得到的官方欄位。每份 raw 依它自己的 fields 對應欄名，再取出這幾欄。
     extra：每份 raw 額外加的欄位，{欄名: 函式(raw)}。
     """
     extra = extra or {}
-    rows = []
+    frames = []
     for raw in raws:
         body = raw["body"]
         if not body.get("data"):
             continue
-        if body.get("fields") != fields:
-            raise ValueError(f"{name}欄位改變：{body.get('fields')}")
-        added = [func(raw) for func in extra.values()]
-        rows += [row + added for row in body["data"]]
-    return pd.DataFrame(rows, columns=fields + list(extra))
+        df = pd.DataFrame(body["data"], columns=body.get("fields"))   # 證交所的資料列是陣列，欄名在 fields
+        df = require_columns(df, fields, name)
+        for col, func in extra.items():
+            df[col] = func(raw)
+        frames.append(df)
+
+    if not frames:
+        return pd.DataFrame(columns=fields + list(extra))
+    return pd.concat(frames, ignore_index=True)
 
 
 def fetched_at(raw: dict) -> datetime.datetime:

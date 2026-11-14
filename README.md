@@ -86,11 +86,14 @@ pipeline/                 資料線：API → raw → stage → MySQL
 │   └─ utils.py               共用小工具（去 HTML、轉數字）
 └─ load/                    L 載入：parquet → MySQL
     └─ mysql.py               入口：每張表整張換掉
+engine/                   規則引擎：stage 表 → 結果表（累計進度、處置日期、驗證）（第 2 週）
+web/                      卡片網站：結果表 → 網頁（FastAPI）
+dags/                     Airflow DAG：依序執行各步驟（第 4 週）
 common/                   共用：config.py（.env 設定）、date_utils.py、mysql_utils.py
 db/init/                  建表 SQL
 scripts/                  Windows 排程用的 .bat
 tests/                    測試（資料夾對應上面）
-docs/                     流程說明、提案
+docs/                     流程說明（flow.md）、資料表（tables.md）、提案
 data/                     raw／stage 檔案（不進版控）
 ```
 

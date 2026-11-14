@@ -59,9 +59,12 @@ def watchlist_date(body) -> str | None:
 
 # ---------- 開休市日期 ----------
 def fetch_holiday(year: int) -> requests.Response:
-    """某一年（西元）。不含颱風等臨時休市。"""
+    """某一年（西元）。不含颱風等臨時休市。
+
+    用 date（那年任一天）指定年份；queryYear 會被忽略，不帶 date 會回傳最新公布的年份。
+    """
     return http_get(f"{TWSE_BASE}/holidaySchedule/holidaySchedule",
-                    {"response": "json", "queryYear": str(year - 1911)})
+                    {"response": "json", "date": f"{year}0101"})
 
 
 # ---------- 每日市場成交 ----------

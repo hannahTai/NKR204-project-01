@@ -9,7 +9,6 @@ import pytest
 from common.date_utils import roc_to_date, roc_to_dates
 from pipeline.transform.utils import chinese_number, strip_html, to_number
 from pipeline.transform.rules import (
-    MARKET_DAILY_FIELDS, HOLIDAY_FIELDS, PUNISH_WATCHLIST_FIELDS, NOTICE_FIELDS, PUNISH_FIELDS,
     announcement_to_frame, market_daily_to_frame, holiday_to_frame, punish_watchlist_to_frame,
     notice_to_frame, punish_to_frame, transform_announcement,
     transform_company, transform_holiday, transform_punish_watchlist, transform_notice,
@@ -17,7 +16,16 @@ from pipeline.transform.rules import (
 )
 
 
-def envelope(rows, fields=NOTICE_FIELDS, fetched_at="2026-11-09T21:00:00+08:00", **body):
+# 官方回傳的完整欄位（照真實回應，含沒用到的欄位）
+NOTICE_API_FIELDS = ["編號", "證券代號", "證券名稱", "累計次數", "注意交易資訊", "日期", "收盤價", "本益比"]
+PUNISH_API_FIELDS = ["編號", "公布日期", "證券代號", "證券名稱", "累計", "處置條件",
+                     "處置起迄時間", "處置措施", "處置內容", "備註"]
+WATCHLIST_API_FIELDS = ["編號", "證券代號", "證券名稱", "近期達本公司「公布注意交易資訊」標準之情形"]
+MARKET_API_FIELDS = ["日期", "成交股數", "成交金額", "成交筆數", "發行量加權股價指數", "漲跌點數"]
+HOLIDAY_API_FIELDS = ["日期", "名稱", "說明"]
+
+
+def envelope(rows, fields=NOTICE_API_FIELDS, fetched_at="2026-11-09T21:00:00+08:00", **body):
     """組一個最小的 raw 信封。"""
     return {"meta": {"fetched_at": fetched_at}, "body": {"stat": "OK", "fields": fields, "data": rows, **body}}
 
@@ -32,7 +40,7 @@ ROW_TENGHUI = [1, "6672", "騰輝電子-KY", "38",
                "115.11.06", "1,463.00", "69.94"]
 
 
-def run(*rows, fields=NOTICE_FIELDS):
+def run(*rows, fields=NOTICE_API_FIELDS):
     return transform_notice(notice_to_frame([envelope(list(rows), fields)]))
 
 
@@ -85,10 +93,38 @@ def test_empty_day_returns_empty_frames():
     assert notices.empty and clauses.empty
 
 
-def test_changed_fields_raise():
-    """上游改了欄位要報錯，不能默默解析出錯的資料。"""
-    with pytest.raises(ValueError, match="欄位"):
-        notice_to_frame([envelope([ROW_ANDES[:2]], fields=["編號", "證券代號"])])
+def test_missing_used_field_raises():
+    """用得到的欄位不見了要報錯，不能默默變成空值。"""
+    fields = [f for f in NOTICE_API_FIELDS if f != "收盤價"]
+    row = [v for f, v in zip(NOTICE_API_FIELDS, ROW_ANDES) if f != "收盤價"]
+    with pytest.raises(ValueError, match="收盤價"):
+        notice_to_frame([envelope([row], fields=fields)])
+
+
+def test_added_field_is_ignored():
+    """官方多加一欄：照樣解析，新欄位不影響。"""
+    notices, _ = run(ROW_ANDES + ["新欄位的值"], fields=NOTICE_API_FIELDS + ["新欄位"])
+    assert notices.iloc[0]["stock_id"] == "6533"
+
+
+def test_reordered_fields_still_work():
+    """官方調整欄位順序：用欄名取，不受影響。"""
+    notices, _ = run(ROW_ANDES[::-1], fields=NOTICE_API_FIELDS[::-1])
+    assert (notices.iloc[0]["stock_id"], notices.iloc[0]["close_price"]) == ("6533", 202.0)
+
+
+def test_unused_field_removed_is_fine():
+    """沒用到的欄位（編號）拿掉：照樣解析。"""
+    notices, _ = run(ROW_ANDES[1:], fields=NOTICE_API_FIELDS[1:])
+    assert notices.iloc[0]["stock_id"] == "6533"
+
+
+def test_company_missing_field_raises():
+    """上市公司 API 沒有 fields：少了用得到的 key 也要報錯，不能載入空的公司代號。"""
+    raw = {"meta": {"key": "20261109"}, "body": [{"公司名稱": "台灣水泥", "公司簡稱": "台泥", "產業別": "01",
+                                                  "上市日期": "19620209"}]}
+    with pytest.raises(ValueError, match="公司代號"):
+        transform_company(raw)
 
 
 def test_missing_clause_raises():
@@ -104,7 +140,7 @@ PUNISH_ROW = [1, "115/11/06", "2360", "致茂", 3, "連續三次", "115/11/09～
 
 
 def test_punish_parses_period_and_minutes():
-    df = transform_punish(punish_to_frame([envelope([PUNISH_ROW], PUNISH_FIELDS)]))
+    df = transform_punish(punish_to_frame([envelope([PUNISH_ROW], PUNISH_API_FIELDS)]))
     row = df.iloc[0]
     assert (row["announce_date"], row["period_start"], row["period_end"]) == (
         datetime.date(2026, 11, 6), datetime.date(2026, 11, 9), datetime.date(2026, 11, 13))
@@ -118,8 +154,8 @@ def test_punish_dedup_keeps_latest_fetch():
     with warnings.catch_warnings():
         warnings.simplefilter("error")   # 不同份 raw 的新舊版本是正常情況，不該警告
         df = transform_punish(punish_to_frame([
-            envelope([newer], PUNISH_FIELDS, fetched_at="2026-11-09T22:00:00+08:00"),
-            envelope([PUNISH_ROW], PUNISH_FIELDS, fetched_at="2026-11-09T21:00:00+08:00"),
+            envelope([newer], PUNISH_API_FIELDS, fetched_at="2026-11-09T22:00:00+08:00"),
+            envelope([PUNISH_ROW], PUNISH_API_FIELDS, fetched_at="2026-11-09T21:00:00+08:00"),
         ]))
     assert len(df) == 1 and df.iloc[0]["stock_name"] == "致茂（新）"
 
@@ -129,7 +165,7 @@ def test_punish_two_in_one_raw_warns():
     other = PUNISH_ROW.copy()
     other[7] = "第二次處置"
     with pytest.warns(UserWarning, match="同一天同一檔有多則處置"):
-        df = transform_punish(punish_to_frame([envelope([PUNISH_ROW, other], PUNISH_FIELDS)]))
+        df = transform_punish(punish_to_frame([envelope([PUNISH_ROW, other], PUNISH_API_FIELDS)]))
     assert len(df) == 1
 
 
@@ -137,20 +173,20 @@ def test_punish_identical_rows_in_one_raw_no_warning():
     """同一份 raw 裡完全相同的兩列只是重複，不警告。"""
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        df = transform_punish(punish_to_frame([envelope([PUNISH_ROW, PUNISH_ROW], PUNISH_FIELDS)]))
+        df = transform_punish(punish_to_frame([envelope([PUNISH_ROW, PUNISH_ROW], PUNISH_API_FIELDS)]))
     assert len(df) == 1
 
 
 def test_punish_star_kept_as_flag():
     row = PUNISH_ROW.copy()
     row[1] = "*115/11/09"
-    df = transform_punish(punish_to_frame([envelope([row], PUNISH_FIELDS)]))
+    df = transform_punish(punish_to_frame([envelope([row], PUNISH_API_FIELDS)]))
     assert df.iloc[0]["has_star_mark"] and df.iloc[0]["announce_date"] == datetime.date(2026, 11, 9)
 
 
 # ---------- 注意累計名單 ----------
 def test_punish_watchlist_date_from_title_and_br_split():
-    raw = envelope([[1, "2455", "全新", "連續二次<br>九個營業日已有五次"]], PUNISH_WATCHLIST_FIELDS,
+    raw = envelope([[1, "2455", "全新", "連續二次<br>九個營業日已有五次"]], WATCHLIST_API_FIELDS,
                    title="115年11月06日 公布注意累計次數可能達處置標準之有價證券一覽表")
     df = transform_punish_watchlist(punish_watchlist_to_frame([raw]))
     assert df.iloc[0]["data_date"] == datetime.date(2026, 11, 6)
@@ -160,13 +196,13 @@ def test_punish_watchlist_date_from_title_and_br_split():
 # ---------- 交易日、休市 ----------
 def test_trading_day_numbers_and_dedup():
     rows = [["115/11/02", "10,422,514,115", "799,687,507,911", "4,104,242", "44,920.14", "-291.69"]]
-    df = transform_trading_day(market_daily_to_frame([envelope(rows, MARKET_DAILY_FIELDS)] * 2))   # 同月抓兩次
+    df = transform_trading_day(market_daily_to_frame([envelope(rows, MARKET_API_FIELDS)] * 2))   # 同月抓兩次
     assert len(df) == 1
     assert df.iloc[0]["volume_shares"] == 10422514115 and df.iloc[0]["taiex_change_points"] == -291.69
 
 
 def test_holiday_is_western_date():
-    df = transform_holiday(holiday_to_frame([envelope([["2026-10-09", "國慶日", "補假"]], HOLIDAY_FIELDS)]))
+    df = transform_holiday(holiday_to_frame([envelope([["2026-10-09", "國慶日", "補假"]], HOLIDAY_API_FIELDS)]))
     assert df.iloc[0]["holiday_date"] == datetime.date(2026, 10, 9)
 
 
@@ -178,14 +214,31 @@ def test_company_snapshot():
     assert (row["company_id"], row["listed_date"], row["snapshot_date"]) == ("1101", datetime.date(1962, 2, 9), datetime.date(2026, 11, 9))
 
 
+ANNOUNCEMENT_TITLES = [{"main": m, "sub": []} for m in ["公司代號", "公司名稱", "發言日期", "發言時間", "主旨", "詳細資料"]]
+
+
+def announcement_raw(data: list) -> dict:
+    return {"meta": {}, "body": {"code": 200, "result": {"titles": ANNOUNCEMENT_TITLES, "data": data}}}
+
+
 def test_announcement_serial_and_joined_subject():
-    titles = [{"main": m, "sub": []} for m in ["公司代號", "公司名稱", "發言日期", "發言時間", "主旨", "詳細資料"]]
     data = [["1303", "南亞", "115/09/01", "15:42:35", "因本公司有價證券達標準，\r\n故公布重大訊息",
-             {"parameters": {"serialNumber": "2"}}]]
-    raw = {"meta": {}, "body": {"code": 200, "result": {"titles": titles, "data": data}}}
-    row = transform_announcement(announcement_to_frame([raw])).iloc[0]
-    assert (row["announce_date"], row["serial_number"]) == (datetime.date(2026, 9, 1), 2)
+             {"parameters": {"enterDate": "1150901", "serialNumber": "2"}}]]
+    row = transform_announcement(announcement_to_frame([announcement_raw(data)])).iloc[0]
+    assert (row["announce_date"], row["enter_date"], row["serial_number"]) == (
+        datetime.date(2026, 9, 1), datetime.date(2026, 9, 1), 2)
     assert row["subject"] == "因本公司有價證券達標準，故公布重大訊息"
+
+
+def test_announcement_same_day_same_serial_both_kept():
+    """實際案例：1709 同一天發言的兩則公告序號都是 1（序號依輸入日期編），兩則都要留下。"""
+    data = [["1709", "和益", "115/11/11", "15:32:02", "公告本公司董事會通過115年第三季合併財務報告",
+             {"parameters": {"enterDate": "1151109", "serialNumber": "1"}}],
+            ["1709", "和益", "115/11/11", "15:42:24", "公告本公司向關係人取得不動產使用權資產",
+             {"parameters": {"enterDate": "1151111", "serialNumber": "1"}}]]
+    out = transform_announcement(announcement_to_frame([announcement_raw(data)]))
+    assert len(out) == 2
+    assert out["enter_date"].tolist() == [datetime.date(2026, 11, 9), datetime.date(2026, 11, 11)]
 
 
 def test_announcement_no_data_is_empty():

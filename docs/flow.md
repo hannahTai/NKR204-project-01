@@ -16,7 +16,7 @@ L 載入    pipeline/load/mysql.py         parquet ──→ MySQL stage_* 表
 
 | 資料 | API | 查詢參數 | 一份涵蓋 | 檔名 |
 |---|---|---|---|---|
-| 開休市日期 | `holidaySchedule/holidaySchedule` | `queryYear=115`（民國年） | 一年 | `2026.json` |
+| 開休市日期 | `holidaySchedule/holidaySchedule` | `date=20260101`（那年任一天；`queryYear` 會被忽略） | 一年 | `2026.json` |
 | 每日市場成交 | `afterTrading/FMTQIK` | `date=20261101`（回傳整個月） | 一個月 | `202611.json` |
 | 注意股 | `announcement/notice` | `startDate`＝`endDate`＝當天 | 一天 | `20261113.json` |
 | 處置股 | `announcement/punish` | `startDate`＝當天，`endDate`＝當天＋14 天 | 一天 | `20261113.json` |
@@ -30,7 +30,7 @@ L 載入    pipeline/load/mysql.py         parquet ──→ MySQL stage_* 表
   - 上個月：已經過完，抓到完整的一次就不再抓。
   - 例：11/13 台積電被列注意 → 抓 11 月；10 月還沒有完整的才抓。
   - 上個月被列過、這個月沒再被列的，上個月也會補完整一次。`--refetch` 則全部重抓。
-- 開休市日期：過去的年份有檔就不再抓。
+- 開休市日期：過去的年份有檔就不再抓；回傳的年份不對時當作失敗，不會蓋掉正確的檔。
 - 單一任務失敗不中斷，最後列出失敗清單。
 - raw 檔 = `meta`（抓取紀錄）+ `body`（API 原始回應）；同 key 直接覆蓋，失敗另存 `<key>.error.json`。
 

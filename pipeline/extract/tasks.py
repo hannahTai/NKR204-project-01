@@ -30,8 +30,18 @@ def download_punish_watchlist() -> pathlib.Path:
 
 
 def download_holiday(year: int) -> pathlib.Path:
-    """開休市日期：一年一份，檔名 2026.json。"""
-    return raw_file.save_raw_response("holiday", str(year), api_twse.fetch_holiday(year))
+    """開休市日期：一年一份，檔名 2026.json。
+
+    回應裡的 queryYear 和要的年份不同就當失敗（存成 2026.error.json），避免把別年的資料存成這一年。
+    """
+    resp = api_twse.fetch_holiday(year)
+    body = raw_file.parse_body(resp)
+
+    problem = None
+    if isinstance(body, dict) and body.get("queryYear") != year:
+        problem = f"要 {year} 年，回傳的是 {body.get('queryYear')} 年"
+
+    return raw_file.save_raw_response("holiday", str(year), resp, problem)
 
 
 def download_market_daily(yyyymm: str) -> pathlib.Path:

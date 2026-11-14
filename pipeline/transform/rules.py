@@ -8,13 +8,14 @@ import warnings
 
 import pandas as pd
 
-from common.date_utils import roc_to_date, roc_to_dates
-from pipeline.transform.utils import chinese_number, fetched_at, rows_to_frame, strip_html, to_number
+from common.date_utils import roc_compact_to_dates, roc_to_date, roc_to_dates
+from pipeline.transform.utils import (chinese_number, fetched_at, require_columns, rows_to_frame, strip_html,
+                                      to_number)
 
 
 # ---------- 注意股 ----------
-# 丟掉的欄位：編號（全部是 1）、累計次數（是查詢回傳的筆數，不是個股累計）
-NOTICE_FIELDS = ["編號", "證券代號", "證券名稱", "累計次數", "注意交易資訊", "日期", "收盤價", "本益比"]
+# 用得到的官方欄位（沒用到：編號＝全部是 1、累計次數＝查詢回傳的筆數，不是個股累計）
+NOTICE_FIELDS = ["證券代號", "證券名稱", "注意交易資訊", "日期", "收盤價", "本益比"]
 NOTICE_COLUMNS = ["trade_date", "stock_id", "stock_name", "reason_text", "close_price", "pe_ratio"]
 NOTICE_CLAUSE_COLUMNS = ["trade_date", "stock_id", "clause"]
 
@@ -52,10 +53,9 @@ def transform_notice(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 # ---------- 處置股 ----------
 # 同一筆公告會出現在好幾天的 raw → 依（公布日期, 代號）去重，留最後抓到的
 # 同一份 raw 裡（公布日期, 代號）重複且內容不同 → 同一天有兩則處置，去重只會留一則，所以發出警告
-# 丟掉的欄位：編號、累計（隨查詢區間變動）、備註（只有連結）
+# 用得到的官方欄位（沒用到：編號、累計＝隨查詢區間變動、備註＝只有連結）
 # 公布日期偶爾帶 *（意義未確認），存成 has_star_mark
-PUNISH_FIELDS = ["編號", "公布日期", "證券代號", "證券名稱", "累計", "處置條件",
-                 "處置起迄時間", "處置措施", "處置內容", "備註"]
+PUNISH_FIELDS = ["公布日期", "證券代號", "證券名稱", "處置條件", "處置起迄時間", "處置措施", "處置內容"]
 
 
 def punish_to_frame(raws: list[dict]) -> pd.DataFrame:
@@ -89,7 +89,8 @@ def transform_punish(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------- 注意累計可能達處置標準名單 ----------
-PUNISH_WATCHLIST_FIELDS = ["編號", "證券代號", "證券名稱", "近期達本公司「公布注意交易資訊」標準之情形"]
+WATCHLIST_PROGRESS = "近期達本公司「公布注意交易資訊」標準之情形"
+PUNISH_WATCHLIST_FIELDS = ["證券代號", "證券名稱", WATCHLIST_PROGRESS]   # 沒用到：編號
 
 
 def title_date(raw: dict):
@@ -103,7 +104,7 @@ def punish_watchlist_to_frame(raws: list[dict]) -> pd.DataFrame:
 
 def transform_punish_watchlist(df: pd.DataFrame) -> pd.DataFrame:
     """→ stage_punish_watchlist"""
-    progress = df[PUNISH_WATCHLIST_FIELDS[3]].str.replace("<br>", "\n")   # 多行情形換成換行
+    progress = df[WATCHLIST_PROGRESS].str.replace("<br>", "\n")   # 多行情形換成換行
     out = pd.DataFrame({
         "data_date": df["data_date"],
         "stock_id": df["證券代號"].str.strip(),
@@ -153,10 +154,15 @@ def transform_holiday(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------- 上市公司 ----------
+COMPANY_FIELDS = ["公司代號", "公司簡稱", "公司名稱", "產業別", "上市日期"]   # 其餘 28 個欄位沒用到
+
+
 def transform_company(raw: dict | None) -> pd.DataFrame:
     """最新一份公司清單 → stage_company"""
-    df = pd.DataFrame(raw["body"] if raw else [],
-                      columns=["公司代號", "公司簡稱", "公司名稱", "產業別", "上市日期"])
+    if raw and raw["body"]:
+        df = require_columns(pd.DataFrame(raw["body"]), COMPANY_FIELDS, "上市公司")   # 每筆是 dict，欄名就是 key
+    else:
+        df = pd.DataFrame(columns=COMPANY_FIELDS)   # 還沒抓過：空表
     return pd.DataFrame({
         "company_id": df["公司代號"].str.strip(),
         "short_name": df["公司簡稱"].str.strip(),
@@ -173,25 +179,33 @@ ANNOUNCEMENT_TITLES = ["公司代號", "公司名稱", "發言日期", "發言�
 
 
 def announcement_to_frame(raws: list[dict]) -> pd.DataFrame:
-    rows = []
+    frames = []
     for raw in raws:
         result = raw["body"].get("result") or {}
         if not result.get("data"):
             continue
-        titles = [t["main"] for t in result["titles"]]
-        if titles != ANNOUNCEMENT_TITLES:
-            raise ValueError(f"重大訊息欄位改變：{titles}")
-        rows += result["data"]
-    return pd.DataFrame(rows, columns=ANNOUNCEMENT_TITLES)
+        titles = [t["main"] for t in result["titles"]]   # 欄名在 titles，依位置對應
+        df = pd.DataFrame(result["data"], columns=titles)
+        frames.append(require_columns(df, ANNOUNCEMENT_TITLES, "重大訊息"))
+
+    if not frames:
+        return pd.DataFrame(columns=ANNOUNCEMENT_TITLES)
+    return pd.concat(frames, ignore_index=True)
 
 
 def transform_announcement(df: pd.DataFrame) -> pd.DataFrame:
-    """→ stage_announcement"""
-    keys = ["company_id", "announce_date", "serial_number"]
+    """→ stage_announcement
+
+    序號是依「輸入日期」（enterDate）編的，不是依發言日期：
+    同一天發言的兩則公告可能序號相同，所以主鍵用（公司, 輸入日期, 序號）。
+    """
+    keys = ["company_id", "enter_date", "serial_number"]
+    params = df["詳細資料"].str["parameters"]
     out = pd.DataFrame({
         "company_id": df["公司代號"].str.strip(),
         "announce_date": roc_to_dates(df["發言日期"]),
-        "serial_number": df["詳細資料"].str["parameters"].str["serialNumber"].astype(int),  # 當天第幾則
+        "enter_date": roc_compact_to_dates(params.str["enterDate"]),        # 例如 "1151102"
+        "serial_number": params.str["serialNumber"].astype(int),            # 輸入日期當天第幾則
         "announce_time": df["發言時間"].str.strip(),
         "company_name": df["公司名稱"].str.strip(),
         "subject": df["主旨"].str.replace(r"\s*\n\s*", "", regex=True).str.strip(),  # 接回被換行切斷的主旨

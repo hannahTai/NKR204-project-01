@@ -21,10 +21,13 @@ def parse_body(resp: requests.Response) -> dict | list | str:
         return resp.text
 
 
-def save_raw_response(source: str, key: str, resp: requests.Response) -> pathlib.Path:
-    """把回應原樣存檔（含網址、狀態碼、抓取時間），同一個 key 直接覆蓋；失敗時存完再報錯。"""
+def save_raw_response(source: str, key: str, resp: requests.Response, problem: str | None = None) -> pathlib.Path:
+    """把回應原樣存檔（含網址、狀態碼、抓取時間），同一個 key 直接覆蓋；失敗時存完再報錯。
+
+    problem：呼叫的人檢查內容後發現的問題（例如回傳的年份不對）；有給就當失敗，存成 .error.json。
+    """
     body = parse_body(resp)
-    ok = resp.ok and not isinstance(body, str)
+    ok = resp.ok and not isinstance(body, str) and problem is None
     request_body = resp.request.body   # POST 的參數；GET 為 None
     envelope = {
         "meta": {
@@ -41,7 +44,8 @@ def save_raw_response(source: str, key: str, resp: requests.Response) -> pathlib
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(envelope, ensure_ascii=False, indent=2), encoding="utf-8")
     if not ok:
-        raise RuntimeError(f"{source} {key} 抓取失敗（HTTP {resp.status_code}），回應已存到 {path}")
+        reason = problem or f"HTTP {resp.status_code}"
+        raise RuntimeError(f"{source} {key} 抓取失敗（{reason}），回應已存到 {path}")
     return path
 
 

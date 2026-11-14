@@ -43,6 +43,18 @@ def roc_to_dates(s: pd.Series) -> pd.Series:
     return pd.to_datetime(pd.DataFrame({"year": ymd[0] + 1911, "month": ymd[1], "day": ymd[2]})).dt.date
 
 
+def roc_compact_to_dates(s: pd.Series) -> pd.Series:
+    """民國年月日連在一起、沒有分隔符號的整欄版（觀測站的 enterDate 用這種格式）。
+
+    >>> roc_compact_to_dates(pd.Series(["1151102", "991231"])).tolist()
+    [datetime.date(2026, 11, 2), datetime.date(2010, 12, 31)]
+    """
+    year = s.str[:-4].astype(int) + 1911   # 後 4 碼是月日，前面是民國年（2 或 3 碼）
+    month = s.str[-4:-2].astype(int)
+    day = s.str[-2:].astype(int)
+    return pd.to_datetime(pd.DataFrame({"year": year, "month": month, "day": day})).dt.date
+
+
 def prev_month(yyyymm: str) -> str:
     """上個月，跨年也對；傳 YYYYMMDD 也可以（只看前 6 碼）。
 
